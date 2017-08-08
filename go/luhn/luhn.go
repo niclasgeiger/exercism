@@ -1,27 +1,38 @@
 package luhn
 
 import (
+	"sort"
 	"strconv"
-	"strings"
-	"fmt"
+	"unicode"
 )
 
-const testVersion=2
+const testVersion = 2
 
 func Valid(num string) bool {
-	fmt.Printf("checking: %s\n",num)
-	sum := 0
-	num = strings.Replace(num, " ","",-1)
-	for i:=len(num)-1;i>=0;i--{
-		number, _ := strconv.Atoi(string(num[i]))
-		fmt.Printf("i:%d before:%d ",i, number)
-		if i%2==1{
-			number = (2*number)%9
+	var sorted sort.StringSlice
+	for i := len(num) - 1; i >= 0; i-- {
+		r := rune(num[i])
+		if unicode.IsNumber(r) {
+			sorted = append(sorted, string(r))
+		} else if !unicode.IsSpace(r) {
+			return false
 		}
-		fmt.Printf("now: %d\n", number)
-		sum += number
 	}
-	if sum == 0 {
+
+	i := 0
+	sum := 0
+	for _, s := range sorted {
+		digit, _ := strconv.Atoi(s)
+		if i%2 == 1 {
+			digit = (digit * 2)
+			if digit > 9 {
+				digit -= 9
+			}
+		}
+		sum += digit
+		i++
+	}
+	if sum == 0 && len(sorted) < 2 {
 		return false
 	}
 	return sum%10 == 0
