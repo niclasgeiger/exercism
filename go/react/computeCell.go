@@ -8,47 +8,93 @@ const (
 )
 
 type DefaultComputeCell struct {
-	Cell1     int // TODO replace with cell instance?
-	Cell2     int // TODO replace with cell instance?
-	Compute1  func(int) int
-	Compute2  func(int, int) int
+	cell1     Cell
+	cell2     Cell
+	oldValue  int
+	compute1  func(int) int
+	compute2  func(int, int) int
 	Type      CellType
-	Observers []CellObserver
+	observers []Observer
+	callbacks []func(int)
 }
 
-func (c *DefaultComputeCell) Value() int {
+func NewCompute1Cell(cell Cell, f func(int) int) ComputeCell {
+	computeCell := &DefaultComputeCell{
+		cell1:     cell,
+		Type:      COMPUTE1_TYPE,
+		observers: []Observer{},
+		compute1:  f,
+		callbacks: []func(int){},
+	}
+	switch v := cell.(type) {
+	case Observable:
+		{
+			v.AddObserver(computeCell)
+		}
+	}
+	return computeCell
+}
+
+func NewCompute2Cell(cell1, cell2 Cell, f func(int, int) int) ComputeCell {
+	computeCell := &DefaultComputeCell{
+		cell1:     cell1,
+		cell2:     cell2,
+		Type:      COMPUTE2_TYPE,
+		observers: []Observer{},
+		compute2:  f,
+		callbacks: []func(int){},
+	}
+	switch v := cell1.(type) {
+	case Observable:
+		{
+			v.AddObserver(computeCell)
+		}
+	}
+	switch v := cell2.(type) {
+	case Observable:
+		{
+			v.AddObserver(computeCell)
+		}
+	}
+	return computeCell
+}
+func (c *DefaultComputeCell) currentVal() int {
 	val := 0
 	switch c.Type {
 	case COMPUTE1_TYPE:
-		val = c.Compute1(c.Cell1)
+		val = c.compute1(c.cell1.Value())
 	case COMPUTE2_TYPE:
-		val = c.Compute2(c.Cell1, c.Cell2)
+		val = c.compute2(c.cell1.Value(), c.cell2.Value())
 	}
-	c.NotifyObservers(val)
 	return val
 }
 
-func (c *DefaultComputeCell) AddCallback(func(int)) Canceler {
-	// TODO
-	return &DefaultCanceler{}
+func (c *DefaultComputeCell) Value() int {
+	val := c.currentVal()
+	c.oldValue = val
+	return val
+}
+
+func (c *DefaultComputeCell) AddCallback(callback func(int)) Canceler {
+	c.callbacks = append(c.callbacks, callback)
+	return &DefaultCanceler{} //TODO
 }
 
 func (c *DefaultComputeCell) AddObserver(observer Observer, cellIndex int) {
-	c.Observers = append(c.Observers, CellObserver{cellIndex, observer})
+	c.observers = append(c.observers, observer)
 }
 
-func (c *DefaultComputeCell) NotifyObservers(val int) {
-	for _, observer := range c.Observers {
-		observer.Update(val, observer.Index)
+func (c *DefaultComputeCell) NotifyObservers() {
+	for _, observer := range c.observers {
+		observer.Update()
 	}
 }
 
-func (c *DefaultComputeCell) Update(val int, index int) {
-	switch index {
-	case 0:
-		c.Cell1 = val
-	case 1:
-		c.Cell2 = val
+func (c *DefaultComputeCell) Update() {
+	if c.currentVal() != c.oldValue {
+		c.NotifyObservers()
+		for _, callback := range c.callbacks {
+			callback(c.Value())
+		}
 	}
-	c.NotifyObservers(c.Value())
 }

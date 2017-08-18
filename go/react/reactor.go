@@ -8,30 +8,13 @@ func New() Reactor {
 }
 
 func (r *DefaultReactor) CreateInput(val int) InputCell {
-	inputCell := &DefaultInputCell{
-		Val:       val,
-		Observers: []CellObserver{},
-	}
-	return inputCell
+	return NewInputCell(val)
 }
 
 func (r *DefaultReactor) CreateCompute1(cell Cell, f func(int) int) ComputeCell {
-	computeCell := &DefaultComputeCell{
-		Cell1:     cell.Value(),
-		Type:      COMPUTE1_TYPE,
-		Observers: []CellObserver{},
-		Compute1:  f,
-	}
-	return computeCell
+	return NewCompute1Cell(cell, f)
 }
 
 func (r *DefaultReactor) CreateCompute2(cell1 Cell, cell2 Cell, f func(int, int) int) ComputeCell {
-	computeCell := &DefaultComputeCell{
-		Cell1:     cell1.Value(),
-		Cell2:     cell2.Value(),
-		Type:      COMPUTE2_TYPE,
-		Observers: []CellObserver{},
-		Compute2:  f,
-	}
-	return computeCell
+	return NewCompute2Cell(cell1, cell2, f)
 }
