@@ -47,3 +47,17 @@ type Canceler interface {
 	// Cancel removes the callback.
 	Cancel()
 }
+
+type Observable interface {
+	AddObserver(Observer, int)
+	NotifyObservers(int)
+}
+
+type Observer interface {
+	Update(val int, index int)
+}
+
+type CellObserver struct {
+	Index int
+	Observer
+}
