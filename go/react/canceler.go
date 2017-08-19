@@ -1,8 +1,9 @@
 package react
 
 type DefaultCanceler struct {
+	Active bool
 }
 
 func (c *DefaultCanceler) Cancel() {
-	// TODO
+	c.Active = false
 }
