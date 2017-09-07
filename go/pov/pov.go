@@ -1,7 +1,5 @@
 package pov
 
-import "fmt"
-
 const testVersion = 2
 
 type Graph struct {
@@ -9,45 +7,36 @@ type Graph struct {
 	Nodes []*Node
 }
 
-type Node struct {
-	Label string
-	To    []*Node
-}
-
 func New() *Graph {
-	node := &Node{
-		Label: "parent",
-	}
 	return &Graph{
-		Root: node,
-		Nodes: []*Node{
-			node,
-		},
+		Nodes: []*Node{},
 	}
 }
 
 func (g *Graph) AddNode(nodeLabel string) *Node {
 	node := &Node{
-		Label: nodeLabel,
-		To:    []*Node{},
+		Label:    nodeLabel,
+		Parents:  []*Node{},
+		Children: []*Node{},
+	}
+	if g.Root == nil {
+		g.Root = node
 	}
 	g.Nodes = append(g.Nodes, node)
 	return node
 }
 
 func (g *Graph) AddArc(from, to string) {
-	defer func() {
-		if recover() != nil {
-			fmt.Printf("\nError recover: \n from:%s\n to:%s\n", from, to)
-			fmt.Printf("Graph:%s\n\n", g)
-		}
-	}()
+	toNode := g.findNode(to)
 	fromNode := g.findNode(from)
 	if fromNode == nil {
 		fromNode = g.AddNode(from)
+		if toNode == g.Root {
+			g.Root = fromNode
+		}
 	}
-	toNode := g.findNode(to)
-	fromNode.To = append(fromNode.To, toNode)
+	fromNode.Children = append(fromNode.Children, toNode)
+	toNode.Parents = append(toNode.Parents, fromNode)
 }
 
 func (g *Graph) ArcList() (out []string) {
@@ -56,19 +45,26 @@ func (g *Graph) ArcList() (out []string) {
 	return out
 }
 
-func getArcs(node *Node) (out []string) {
-	out = []string{}
-	if node != nil {
-		for _, neighbor := range node.To {
-			out = append(out, fmt.Sprintf("%s -> %s", node.Label, neighbor.Label))
-			out = append(out, getArcs(neighbor)...)
-		}
-	}
-	return out
+func (g *Graph) ChangeRoot(oldRoot, newRoot string) *Graph {
+
+	g.ArcList()
+	new := g.findNode(newRoot)
+	switchUntilOldRoot(new, g.Root, Nodes{})
+	g.Root = new
+	return g
 }
 
-func (g *Graph) ChangeRoot(oldRoot, newRoot string) *Graph {
-	return new(Graph)
+func switchUntilOldRoot(node *Node, root *Node, visited Nodes) {
+	visited = append(visited, node)
+	if node == root {
+		return
+	}
+	for _, parent := range node.Parents {
+		if !visited.containsNode(parent) {
+			switchDirection(parent, node)
+			switchUntilOldRoot(parent, root, visited)
+		}
+	}
 }
 
 func (g *Graph) findNode(label string) *Node {
