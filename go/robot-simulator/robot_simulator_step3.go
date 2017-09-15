@@ -1,38 +1,72 @@
 package robot
 
+import (
+	"strings"
+	"sync"
+)
+
+type Robots struct {
+	Map map[string]Step3Robot
+	sync.Mutex
+}
+
 func Room3(rect Rect, robots []Step3Robot, actions chan Action3, report chan []Step3Robot, log chan string) {
 	defer close(report)
-	robotMap := map[string]Step3Robot{}
-	for _, robot := range robots {
-		robotMap[robot.Name] = robot
+	robotMap := Robots{
+		Map: make(map[string]Step3Robot),
 	}
-	action := <-actions
-	if len(action.RobotName) > 0 {
-		robot := robotMap[action.RobotName]
-		robot.DoAction(rect, action.Action, log)
-		robotMap[action.RobotName] = robot
-	} else {
-		log <- "empty name"
+	for _, robot := range robots {
+		robotMap.Mutex.Lock()
+		if _, found := robotMap.Map[robot.Name]; found {
+			log <- "same named robots"
+			report <- nil
+			return
+		}
+		if len(robot.Name) == 0 {
+			log <- "no name on robot"
+			report <- nil
+			return
+		}
+		if cellIsOccupied(robot.Northing, robot.Easting, robotMap.Map) {
+			log <- "cell is already occupied"
+			report <- nil
+			return
+		}
+		if robot.Northing > rect.Max.Northing || robot.Northing < rect.Min.Northing || robot.Easting > rect.Max.Easting || robot.Easting < rect.Min.Easting {
+			log <- "cell is already occupied"
+			report <- nil
+			return
+		}
+		robotMap.Map[robot.Name] = robot
+		robotMap.Mutex.Unlock()
 	}
 	for action := range actions {
-		if len(action.RobotName) > 0 {
-			if action.Action == REPORT {
-				report <- toArray(robotMap)
-			} else {
-				robot := robotMap[action.RobotName]
-				robot.DoAction(rect, action.Action, log)
-				robotMap[action.RobotName] = robot
-			}
+		robotMap.Mutex.Lock()
+		if action.Action == REPORT {
+			report <- toArray(robotMap.Map)
 		} else {
-			log <- "empty name"
+			robot := robotMap.Map[action.RobotName]
+			robot.DoAction(rect, action.Action, log, robotMap.Map)
+			robotMap.Map[action.RobotName] = robot
 		}
+		robotMap.Mutex.Unlock()
 	}
+
 }
 func toArray(robots map[string]Step3Robot) (out []Step3Robot) {
 	for _, robot := range robots {
 		out = append(out, robot)
 	}
 	return
+}
+
+func cellIsOccupied(northing, easting RU, robots map[string]Step3Robot) bool {
+	for _, robot := range robots {
+		if robot.Northing == northing && robot.Easting == easting {
+			return true
+		}
+	}
+	return false
 }
 
 func StartRobot3(name string, script string, actions chan Action3, log chan string) {
@@ -42,21 +76,25 @@ func StartRobot3(name string, script string, actions chan Action3, log chan stri
 			Action:    (Action)(command),
 		}
 		actions <- action
+		if !strings.Contains("ARL_ ", string(command)) {
+			log <- "unknown command"
+			break
+		}
 	}
-	reportAction := Action3{
+	report := Action3{
 		RobotName: name,
 		Action:    REPORT,
 	}
-	actions <- reportAction
+	actions <- report
 }
 
-func (robot *Step3Robot) DoAction(rect Rect, action Action, log chan string) {
+func (robot *Step3Robot) DoAction(rect Rect, action Action, log chan string, robots map[string]Step3Robot) {
 	switch action {
 	case INIT:
 		robot = &Step3Robot{}
 		return
 	case ADVANCE:
-		robot.Advance(rect, log)
+		robot.Advance(rect, log, robots)
 		return
 	case LEFT:
 		robot.Left(rect)
@@ -65,34 +103,33 @@ func (robot *Step3Robot) DoAction(rect Rect, action Action, log chan string) {
 		robot.Right(rect)
 		return
 	}
-	log <- "unknown command"
 }
 
-func (robot *Step3Robot) Advance(rect Rect, log chan string) {
+func (robot *Step3Robot) Advance(rect Rect, log chan string, robots map[string]Step3Robot) {
 	switch robot.Dir {
 	case N:
-		if robot.Northing < rect.Max.Northing {
+		if robot.Northing < rect.Max.Northing && !cellIsOccupied(robot.Northing+1, robot.Easting, robots) {
 			robot.Northing++
 		} else {
-			log <- "bumped into wall"
+			log <- "bumped into something"
 		}
 	case S:
-		if robot.Northing > rect.Min.Northing {
+		if robot.Northing > rect.Min.Northing && !cellIsOccupied(robot.Northing-1, robot.Easting, robots) {
 			robot.Northing--
 		} else {
-			log <- "bumped into wall"
+			log <- "bumped into something"
 		}
 	case W:
-		if robot.Easting > rect.Min.Easting {
+		if robot.Easting > rect.Min.Easting && !cellIsOccupied(robot.Northing, robot.Easting-1, robots) {
 			robot.Easting--
 		} else {
-			log <- "bumped into wall"
+			log <- "bumped into something"
 		}
 	case E:
-		if robot.Easting < rect.Max.Easting {
+		if robot.Easting < rect.Max.Easting && !cellIsOccupied(robot.Northing, robot.Easting+1, robots) {
 			robot.Easting++
 		} else {
-			log <- "bumped into wall"
+			log <- "bumped into something"
 		}
 	}
 }
