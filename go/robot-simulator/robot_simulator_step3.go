@@ -40,12 +40,22 @@ func Room3(rect Rect, robots []Step3Robot, actions chan Action3, report chan []S
 		robotMap.Map[robot.Name] = robot
 		robotMap.Mutex.Unlock()
 	}
+	reportCount := 0
 	for action := range actions {
 		robotMap.Mutex.Lock()
 		if action.Action == REPORT {
-			report <- toArray(robotMap.Map)
+			reportCount++
+			// every robot reported back
+			if reportCount == len(robotMap.Map) {
+				report <- toArray(robotMap.Map)
+			}
 		} else {
-			robot := robotMap.Map[action.RobotName]
+			robot, found := robotMap.Map[action.RobotName]
+			if !found {
+				log <- "wrong robot name"
+				report <- nil
+				return
+			}
 			robot.DoAction(rect, action.Action, log, robotMap.Map)
 			robotMap.Map[action.RobotName] = robot
 		}
